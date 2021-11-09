@@ -51,7 +51,8 @@ _LSP_SIG_CFG = {
   timer_interval = 200, -- default timer check interval
   toggle_key = nil, -- toggle signature on and off in insert mode,  e.g. '<M-x>'
   -- set this key also helps if you want see signature in newline
-  check_3rd_handler = nil -- provide you own handler
+  check_3rd_handler = nil, -- provide you own handler
+  enabled = true -- toggled on by default
 }
 
 local log = helper.log
@@ -398,7 +399,7 @@ local signature = function()
     return
   end
 
-  if triggered then
+  if triggered and _LSP_SIG_CFG.enabled then
     -- overwrite signature help here to disable "no signature help" message
     local params = vim.lsp.util.make_position_params()
     params.position.character = trigger_position
@@ -550,31 +551,41 @@ M.on_attach = function(cfg, bufnr)
 
 end
 
-M.toggle_float_win = function()
-  if _LSP_SIG_CFG.winnr and _LSP_SIG_CFG.winnr > 0 and vim.api.nvim_win_is_valid(_LSP_SIG_CFG.winnr) then
-    vim.api.nvim_win_close(_LSP_SIG_CFG.winnr, true)
-    _LSP_SIG_CFG.winnr = nil
-    _LSP_SIG_CFG.bufnr = nil
-    if _LSP_SIG_VT_NS then
-      vim.api.nvim_buf_clear_namespace(0, _LSP_SIG_VT_NS, 0, -1)
-    end
-    return
-  end
+M.win_exists = function()
+    return _LSP_SIG_CFG.winnr and _LSP_SIG_CFG.winnr > 0 and
+               vim.api.nvim_win_is_valid(_LSP_SIG_CFG.winnr)
+end
 
-  local params = vim.lsp.util.make_position_params()
-  local pos = api.nvim_win_get_cursor(0)
-  local line = api.nvim_get_current_line()
-  local line_to_cursor = line:sub(1, pos[2])
-  -- Try using the already binded one, otherwise use it without custom config.
-  -- LuaFormatter off
-  vim.lsp.buf_request(0, "textDocument/signatureHelp", params,
-                      vim.lsp.with(signature_handler, {
-                        check_pumvisible = true,
-                        trigger_from_lsp_sig = true,
-                        line_to_cursor = line_to_cursor,
-                        border = _LSP_SIG_CFG.handler_opts.border,
-                      }))
-  -- LuaFormatter on
+M.toggle_float_win = function()
+  if _LSP_SIG_CFG.enabled then
+    _LSP_SIG_CFG.enabled = false
+    if M.win_exists() then
+      vim.api.nvim_win_close(_LSP_SIG_CFG.winnr, true)
+      _LSP_SIG_CFG.winnr = nil
+      _LSP_SIG_CFG.bufnr = nil
+      if _LSP_SIG_VT_NS then
+        vim.api.nvim_buf_clear_namespace(0, _LSP_SIG_VT_NS, 0, -1)
+      end
+    end
+  else
+    _LSP_SIG_CFG.enabled = true
+    if not M.win_exists() then
+      local params = vim.lsp.util.make_position_params()
+      local pos = api.nvim_win_get_cursor(0)
+      local line = api.nvim_get_current_line()
+      local line_to_cursor = line:sub(1, pos[2])
+      -- Try using the already binded one, otherwise use it without custom config.
+      -- LuaFormatter off
+      vim.lsp.buf_request(0, "textDocument/signatureHelp", params,
+                          vim.lsp.with(signature_handler, {
+                            check_pumvisible = true,
+                            trigger_from_lsp_sig = true,
+                            line_to_cursor = line_to_cursor,
+                            border = _LSP_SIG_CFG.handler_opts.border,
+                          }))
+      -- LuaFormatter on
+    end
+  end
 
 end
 
